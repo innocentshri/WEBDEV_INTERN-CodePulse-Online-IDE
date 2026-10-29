@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CodePulse — Online IDE & Live Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden font-sans">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-3">
+      <div class="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></div>
+      <h1 class="font-bold text-lg tracking-tight text-white">CodePulse <span class="text-xs font-normal text-slate-400 bg-slate-800 px-2 py-0.5 rounded ml-1">IDE</span></h1>
+      
+      <!-- Templates Dropdown -->
+      <select id="templateSelect" class="ml-4 bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-emerald-500">
+        <option value="">Load Starter Template...</option>
+        <option value="welcome">1. Modern Glassmorphism Card</option>
+        <option value="counter">2. Interactive Task Counter</option>
+        <option value="canvas">3. HTML5 Canvas Particle Matrix</option>
+      </select>
+    </div>
+
+    <!-- Layout & Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Layout Switcher -->
+      <div class="flex bg-slate-800 rounded p-0.5 border border-slate-700 text-xs">
+        <button onclick="setLayout('split')" id="btn-split" class="px-2.5 py-1 rounded bg-slate-700 text-white font-medium">Side-by-Side</button>
+        <button onclick="setLayout('stacked')" id="btn-stacked" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Stacked</button>
+        <button onclick="setLayout('preview')" id="btn-preview" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Full Preview</button>
+      </div>
+
+      <button onclick="runCode()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded transition">
+        ▶ Run
+      </button>
+      <button onclick="shareUrl()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded transition">
+        🔗 Share URL
+      </button>
+      <button onclick="saveToCloud()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded transition">
+        ☁️ Cloud Save
+      </button>
+      <button onclick="downloadHtml()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold px-3 py-1.5 rounded transition">
+        ⬇ Export
+      </button>
+    </div>
+  </header>
+
+  <!-- Notification Banner -->
+  <div id="toast" class="hidden fixed bottom-4 right-4 bg-emerald-600 text-white text-xs font-medium px-4 py-2.5 rounded shadow-lg z-50"></div>
+
+  <!-- Main Workspace -->
+  <main id="workspace" class="flex-1 flex flex-row overflow-hidden">
+    
+    <!-- Left/Top Pane: Monaco Code Editor -->
+    <section id="editorPane" class="w-1/2 h-full flex flex-col border-r border-slate-800">
+      <!-- File Tabs -->
+      <div class="bg-slate-900 border-b border-slate-800 flex items-center justify-between px-2">
+        <div class="flex">
+          <button onclick="switchTab('html')" id="tab-html" class="px-4 py-2 text-xs font-semibold border-b-2 border-emerald-400 text-emerald-400 bg-slate-800/50">index.html</button>
+          <button onclick="switchTab('css')" id="tab-css" class="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200">style.css</button>
+          <button onclick="switchTab('js')" id="tab-js" class="px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200">script.js</button>
+        </div>
+        <span class="text-[11px] text-slate-500 pr-2">Auto-saved locally</span>
+      </div>
+
+      <!-- Monaco Container -->
+      <div id="monaco-container" class="flex-1 w-full"></div>
+    </section>
+
+    <!-- Right/Bottom Pane: Live Preview & Console -->
+    <section id="previewPane" class="w-1/2 h-full flex flex-col bg-white">
+      <div class="bg-slate-900 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between">
+        <span class="text-xs font-medium text-slate-400">Live Browser Sandbox (iframe)</span>
+        <button onclick="clearConsole()" class="text-[11px] text-slate-400 hover:text-white">Clear Console</button>
+      </div>
+      
+      <!-- Live Render Iframe -->
+      <iframe id="previewFrame" class="flex-1 w-full bg-white" sandbox="allow-scripts allow-modals"></iframe>
+
+      <!-- Integrated JS Console -->
+      <div class="h-36 bg-slate-950 border-t border-slate-800 flex flex-col">
+        <div class="px-3 py-1 bg-slate-900 border-b border-slate-800 text-[11px] font-semibold text-slate-400">
+          Console Output
+        </div>
+        <div id="consoleOutput" class="flex-1 p-2 overflow-y-auto font-mono text-xs space-y-1 text-slate-300"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const TEMPLATES = {
+      welcome: {
+        html: `<div class="card">\n  <span class="badge">Live Sandbox</span>\n  <h1>CodePulse Studio</h1>\n  <p>Edit HTML, CSS, and JS in real time with instant preview and URL sharing.</p>\n  <button id="actionBtn">Trigger Pulse</button>\n</div>`,
+        css: `body {\n  margin: 0;\n  height: 100vh;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  background: linear-gradient(135deg, #0f172a, #1e1b4b);\n  font-family: system-ui, sans-serif;\n  color: white;\n}\n.card {\n  background: rgba(255, 255, 255, 0.07);\n  backdrop-filter: blur(12px);\n  border: 1px solid rgba(255, 255, 255, 0.15);\n  padding: 2.5rem;\n  border-radius: 1rem;\n  text-align: center;\n  max-width: 360px;\n}\n.badge {\n  background: #10b981;\n  color: #052e16;\n  font-size: 0.75rem;\n  font-weight: 700;\n  padding: 0.25rem 0.75rem;\n  border-radius: 999px;\n}\nbutton {\n  margin-top: 1rem;\n  background: #6366f1;\n  color: white;\n  border: none;\n  padding: 0.6rem 1.4rem;\n  border-radius: 0.5rem;\n  cursor: pointer;\n  font-weight: 600;\n}\nbutton:hover { background: #4f46e5; }`,
+        js: `const btn = document.getElementById('actionBtn');\nlet count = 0;\nbtn.addEventListener('click', () => {\n  count++;\n  btn.textContent = \`Pulse Triggered (\${count})\`;\n  console.log('Pulse clicked:', count);\n});`
+      },
+      counter: {
+        html: `<div class="app">\n  <h2>Sprint Task Tracker</h2>\n  <div class="input-row">\n    <input id="taskInput" placeholder="Add a deliverable..." />\n    <button onclick="addTask()">Add</button>\n  </div>\n  <ul id="taskList"></ul>\n</div>`,
+        css: `body { font-family: sans-serif; background: #f8fafc; padding: 2rem; }\n.app { max-width: 400px; margin: auto; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }\n.input-row { display: flex; gap: 8px; }\ninput { flex: 1; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }\nbutton { background: #0f172a; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }\nul { padding-left: 1.2rem; margin-top: 1rem; }\nli { margin-bottom: 6px; color: #334155; }`,
+        js: `function addTask() {\n  const input = document.getElementById('taskInput');\n  if (!input.value.trim()) return;\n  const li = document.createElement('li');\n  li.textContent = input.value;\n  document.getElementById('taskList').appendChild(li);\n  console.log('Added task:', input.value);\n  input.value = '';\n}`
+      },
+      canvas: {
+        html: `<canvas id="c"></canvas>`,
+        css: `body { margin: 0; overflow: hidden; background: #090d16; }\ncanvas { display: block; }`,
+        js: `const canvas = document.getElementById('c');\nconst ctx = canvas.getContext('2d');\ncanvas.width = window.innerWidth;\ncanvas.height = window.innerHeight;\nconst particles = Array.from({ length: 50 }, () => ({\n  x: Math.random() * canvas.width,\n  y: Math.random() * canvas.height,\n  vx: (Math.random() - 0.5) * 2,\n  vy: (Math.random() - 0.5) * 2\n}));\nfunction animate() {\n  ctx.fillStyle = 'rgba(9, 13, 22, 0.2)';\n  ctx.fillRect(0, 0, canvas.width, canvas.height);\n  ctx.fillStyle = '#38bdf8';\n  particles.forEach(p => {\n    p.x = (p.x + p.vx + canvas.width) % canvas.width;\n    p.y = (p.y + p.vy + canvas.height) % canvas.height;\n    ctx.beginPath();\n    ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);\n    ctx.fill();\n  });\n  requestAnimationFrame(animate);\n}\nanimate();\nconsole.log('Initialized 50 canvas particles.');`
+      }
+    };
+
+    let state = {
+      activeTab: 'html',
+      html: TEMPLATES.welcome.html,
+      css: TEMPLATES.welcome.css,
+      js: TEMPLATES.welcome.js
+    };
+
+    let editor;
+    let debounceTimer;
+
+    // Load saved state from URL Hash, Query ID, or LocalStorage
+    async function initState() {
+      const params = new URLSearchParams(window.location.search);
+      const snippetId = params.get('id');
+
+      if (snippetId) {
+        try {
+          const res = await fetch(`/api/snippets/${snippetId}`);
+          if (res.ok) {
+            const data = await res.json();
+            state.html = data.html;
+            state.css = data.css;
+            state.js = data.js;
+            showToast('Loaded cloud snippet #' + snippetId);
+            return;
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      if (window.location.hash.startsWith('#code=')) {
+        try {
+          const decoded = JSON.parse(atob(window.location.hash.slice(6)));
+          state.html = decoded.html || '';
+          state.css = decoded.css || '';
+          state.js = decoded.js || '';
+          showToast('Loaded shared code from URL');
+          return;
+        } catch (e) {
+          console.error('Invalid URL hash');
+        }
+      }
+
+      const saved = localStorage.getItem('codepulse_state');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          state.html = parsed.html ?? state.html;
+          state.css = parsed.css ?? state.css;
+          state.js = parsed.js ?? state.js;
+        } catch {}
+      }
+    }
+
+    // Initialize Monaco Editor
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+    require(['vs/editor/editor.main'], async function () {
+      await initState();
+
+      editor = monaco.editor.create(document.getElementById('monaco-container'), {
+        value: state[state.activeTab],
+        language: 'html',
+        theme: 'vs-dark',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        fontSize: 14,
+        padding: { top: 12 }
+      });
+
+      editor.onDidChangeModelContent(() => {
+        state[state.activeTab] = editor.getValue();
+        localStorage.setItem('codepulse_state', JSON.stringify(state));
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(runCode, 400);
+      });
+
+      runCode();
+    });
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      const langMap = { html: 'html', css: 'css', js: 'javascript' };
+      monaco.editor.setModelLanguage(editor.getModel(), langMap[tab]);
+      editor.setValue(state[tab]);
+
+      ['html', 'css', 'js'].forEach(t => {
+        const btn = document.getElementById('tab-' + t);
+        if (t === tab) {
+          btn.className = 'px-4 py-2 text-xs font-semibold border-b-2 border-emerald-400 text-emerald-400 bg-slate-800/50';
+        } else {
+          btn.className = 'px-4 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200';
+        }
+      });
+    }
+
+    function runCode() {
+      const frame = document.getElementById('previewFrame');
+      const consoleHook = `
+        <script>
+          const _log = console.log;
+          const _err = console.error;
+          console.log = (...args) => {
+            window.parent.postMessage({ type: 'log', data: args.join(' ') }, '*');
+            _log.apply(console, args);
+          };
+          console.error = (...args) => {
+            window.parent.postMessage({ type: 'error', data: args.join(' ') }, '*');
+            _err.apply(console, args);
+          };
+          window.onerror = (msg, url, line) => {
+            window.parent.postMessage({ type: 'error', data: msg + ' (line ' + line + ')' }, '*');
+          };
+        <\/script>
+      `;
+
+      frame.srcdoc = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <style>${state.css}</style>
+            ${consoleHook}
+          </head>
+          <body>
+            ${state.html}
+            <script>${state.js}<\/script>
+          </body>
+        </html>
+      `;
+    }
+
+    window.addEventListener('message', (e) => {
+      if (!e.data || !e.data.type) return;
+      const out = document.getElementById('consoleOutput');
+      const line = document.createElement('div');
+      line.className = e.data.type === 'error' ? 'text-rose-400' : 'text-emerald-300';
+      line.textContent = `> ${e.data.data}`;
+      out.appendChild(line);
+      out.scrollTop = out.scrollHeight;
+    });
+
+    function clearConsole() {
+      document.getElementById('consoleOutput').innerHTML = '';
+    }
+
+    function setLayout(mode) {
+      const workspace = document.getElementById('workspace');
+      const editorPane = document.getElementById('editorPane');
+      const previewPane = document.getElementById('previewPane');
+
+      ['split', 'stacked', 'preview'].forEach(m => {
+        document.getElementById('btn-' + m).className = m === mode
+          ? 'px-2.5 py-1 rounded bg-slate-700 text-white font-medium'
+          : 'px-2.5 py-1 rounded text-slate-400 hover:text-white';
+      });
+
+      if (mode === 'split') {
+        workspace.className = 'flex-1 flex flex-row overflow-hidden';
+        editorPane.className = 'w-1/2 h-full flex flex-col border-r border-slate-800';
+        previewPane.className = 'w-1/2 h-full flex flex-col bg-white';
+      } else if (mode === 'stacked') {
+        workspace.className = 'flex-1 flex flex-col overflow-hidden';
+        editorPane.className = 'w-full h-1/2 flex flex-col border-b border-slate-800';
+        previewPane.className = 'w-full h-1/2 flex flex-col bg-white';
+      } else if (mode === 'preview') {
+        workspace.className = 'flex-1 flex flex-row overflow-hidden';
+        editorPane.className = 'hidden';
+        previewPane.className = 'w-full h-full flex flex-col bg-white';
+      }
+    }
+
+    document.getElementById('templateSelect').addEventListener('change', (e) => {
+      const tpl = TEMPLATES[e.target.value];
+      if (!tpl) return;
+      state.html = tpl.html;
+      state.css = tpl.css;
+      state.js = tpl.js;
+      editor.setValue(state[state.activeTab]);
+      clearConsole();
+      runCode();
+      showToast('Template loaded');
+    });
+
+    function shareUrl() {
+      const encoded = btoa(JSON.stringify({ html: state.html, css: state.css, js: state.js }));
+      const url = `${window.location.origin}${window.location.pathname}#code=${encoded}`;
+      navigator.clipboard.writeText(url);
+      window.location.hash = `code=${encoded}`;
+      showToast('Shareable URL copied to clipboard!');
+    }
+
+    async function saveToCloud() {
+      try {
+        const res = await fetch('/api/snippets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state)
+        });
+        const data = await res.json();
+        if (data.id) {
+          const shareLink = `${window.location.origin}/?id=${data.id}`;
+          navigator.clipboard.writeText(shareLink);
+          showToast(`Saved to backend! Link copied (?id=${data.id})`);
+        }
+      } catch {
+        showToast('Cloud save unavailable in static mode; use Share URL.');
+      }
+    }
+
+    function downloadHtml() {
+      const fullHtml = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<style>\n${state.css}\n</style>\n</head>\n<body>\n${state.html}\n<script>\n${state.js}\n<\/script>\n</body>\n</html>`;
+      const blob = new Blob([fullHtml], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'codepulse-export.html';
+      a.click();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+  </script>
+</body>
+</html>

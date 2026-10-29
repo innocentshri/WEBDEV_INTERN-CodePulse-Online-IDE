@@ -1,0 +1,12 @@
+{
+  "name": "code-pulse-ide",
+  "version": "1.0.0",
+  "description": "Online Code Editor with Live Preview and Cloud Snippet Sharing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
